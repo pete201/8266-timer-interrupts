@@ -29,13 +29,12 @@ and perform an action based on this as needed
 
 Ticker timer;
 
-volatile int interrupts;    // volatile so that optimiser leaves it alone
+int countInterrupts;
+volatile bool printOutput = false;    // volatile so that optimiser leaves it alone
 
 // ISR to Fire when Timer is triggered
 void ICACHE_RAM_ATTR onTime() {
-	interrupts++;
-	Serial.print("Total Ticks:");
-	Serial.println(interrupts);
+	printOutput = true;
 	// Re-Arm the timer as using TIM_SINGLE
 	timer1_write(2500000);//12us
 }
@@ -63,4 +62,11 @@ void setup()
 
 void loop()
 {
+    if(printOutput){
+        countInterrupts++;
+	    Serial.print("Total Ticks:");
+	    Serial.println(countInterrupts);
+        printOutput = false;
+    }
+    
 }
