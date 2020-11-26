@@ -27,7 +27,12 @@ and perform an action based on this as needed
 //#include <ESP8266WiFi.h>
 #include <Ticker.h>
 
-Ticker timer;
+//Ticker timer;
+
+/*
+this code is crazy: it sets up a Ticker object called timer and then never uses it!!  proof is that you can comment out "Ticker timer;" and it still works!!!
+this is completely wrong use of Ticker, and resorts to using timer1 instead
+*/
 
 int countInterrupts;
 volatile bool printOutput = false;    // volatile so that optimiser leaves it alone
