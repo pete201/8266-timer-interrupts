@@ -1,7 +1,13 @@
 /*
 This sketch shows examples of using interrupts both using 8266 'built in' timer1, and also the Ticker library
 
-NOTE - Timer1 interrupts may interfere with other functionality (PWM for example) depending on the timer chosen to configure.
+When Ticker fires, the count of times it has fired is output to the Serial Monitor.
+Each time Ticker fires, it then fires timer1 which outputs 0.5s later
+
+The code in loop outputs the ISR counts to Serial by inspecting the interrupts flags, 
+
+
+NOTE - timer1 interrupts may interfere with other functionality (PWM for example) depending on the timer chosen to configure.
 ESP8266 has 2 x Timers available:
     0 (Used by WiFi)
     1 is available to configure.
@@ -17,11 +23,6 @@ The ISR is then configured to fire after a specific number of ticks.
 The prescaler is used, as the timers can only store up to 8/16 bits in their counters, meaning they would overflow every 
 256/16000000 s (16us) for 8 bit counters, and 65536 / 16000000 s (4us) for 16 bit counters, which is often far more than needed. 
 The prescaler allows this to be scaled to allow longer intervals.
-
-This example simply shows the count of times it has fired in the Serial Monitor, and is configured to fire once per second.
-
-The code in loop is simply to output to the user, and like with External Interrupts, loop can simply inspect the interrupts flag, 
-and perform an action based on this as needed
 */
 
 //#include <ESP8266WiFi.h>
@@ -43,13 +44,15 @@ int countTimer1Interrupts = 0;
 // ISR to Fire when Timer1 is triggered
 void ICACHE_RAM_ATTR onTimer1() {
 	printTimer1_Output = true;
-	// Re-Arm the timer as using TIM_SINGLE
-	timer1_write(2500000);//12us
+	
 }
 
 // ISR to Fire when Ticker "updateOutput" is triggered.  NOTE that ticker ISRs do not need "ICACHE_RAM_ATTR"
+// Ticker ISR then fires timer1 ISR
 void tickerUpdateOutput(){
 	printTickerOutput = true;
+	// Fire timer1 (as using TIM_SINGLE)
+	timer1_write(2500000);//12us
 }
 
 
