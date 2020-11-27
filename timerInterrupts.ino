@@ -1,8 +1,8 @@
-// https://www.visualmicro.com/page/Timer-Interrupts-Explained.aspx
-
 /*
-NOTE - Timer interrupts may interfere with other functionality (PWM for example) depending on the timer chosen to configure.
-ESP8266 gas 2 x Timers available:
+This sketch shows examples of using interrupts both using 8266 'built in' timer1, and also the Ticker library
+
+NOTE - Timer1 interrupts may interfere with other functionality (PWM for example) depending on the timer chosen to configure.
+ESP8266 has 2 x Timers available:
     0 (Used by WiFi)
     1 is available to configure.
 
@@ -27,29 +27,37 @@ and perform an action based on this as needed
 //#include <ESP8266WiFi.h>
 #include <Ticker.h>
 
-//Ticker timer;
+Ticker timer;		// this timer is used to print the number of interrupts every 0.5s
+Ticker updateOutput;	// create a Ticker instance that will be used to update the Serial output regularly
 
-/*
-this code is crazy: it sets up a Ticker object called timer and then never uses it!!  proof is that you can comment out "Ticker timer;" and it still works!!!
-this is completely wrong use of Ticker, and resorts to using timer1 instead
-*/
+const int tickerInterval = 1000;		// interval in ms (since we use attach_ms)
+int countTickerInterrupts = 0;
+volatile bool printTickerOutput = false;    	// volatile so that optimiser leaves it alone
 
-int countInterrupts;
-volatile bool printOutput = false;    // volatile so that optimiser leaves it alone
+//timer1 variables
+volatile bool printTimer1_Output = false;
+int countTimer1Interrupts = 0;
 
-// ISR to Fire when Timer is triggered
-void ICACHE_RAM_ATTR onTime() {
-	printOutput = true;
+
+
+// ISR to Fire when Timer1 is triggered
+void ICACHE_RAM_ATTR onTimer1() {
+	printTimer1_Output = true;
 	// Re-Arm the timer as using TIM_SINGLE
 	timer1_write(2500000);//12us
+}
+
+// ISR to Fire when Ticker "updateOutput" is triggered.  NOTE that ticker ISRs do not need "ICACHE_RAM_ATTR"
+void tickerUpdateOutput(){
+	printTickerOutput = true;
 }
 
 
 void setup()
 {
 	Serial.begin(115200);
-	//Initialize Ticker every 0.5s
-	timer1_attachInterrupt(onTime); // Add ISR Function
+	//Initialize Timer1 every 0.5s
+	timer1_attachInterrupt(onTimer1); // Add ISR Function
 	timer1_enable(TIM_DIV16, TIM_EDGE, TIM_SINGLE);
 	/* Dividers:
 		TIM_DIV1 = 0,   //80MHz (80 ticks/us - 104857.588 us max)
@@ -60,18 +68,27 @@ void setup()
 		TIM_LOOP	1 //on interrupt the counter will start with the same value again
 	*/
 	
-	// Arm the Timer for our 0.5s Interval
+	// Arm  Timer1 for our 0.5s Interval
 	timer1_write(2500000); // 2500000 / 5 ticks per us from TIM_DIV16 == 500,000 us interval 
+
+	// Ticker setup
+	updateOutput.attach_ms(tickerInterval, tickerUpdateOutput);	// (time in ms, ISR to call)
 }
 
 
 void loop()
 {
-    if(printOutput){
-        countInterrupts++;
-	    Serial.print("Total Ticks:");
-	    Serial.println(countInterrupts);
-        printOutput = false;
+    if(printTickerOutput){
+        countTickerInterrupts++;
+	    Serial.print("Total Ticks from Ticker: ");
+	    Serial.println(countTickerInterrupts);
+        printTickerOutput = false;
     }
     
+	if(printTimer1_Output){
+		countTimer1Interrupts++;
+		Serial.print("Total Ticks from Timer1: ");
+		Serial.println(countTimer1Interrupts);
+		printTimer1_Output = false;
+	}
 }
