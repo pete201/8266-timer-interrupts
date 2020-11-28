@@ -1,94 +1,72 @@
 /*
-This sketch shows examples of using interrupts both using 8266 'built in' timer1, and also the Ticker library
+This sketch shows examples of using interrupts with the Ticker library
+https://links2004.github.io/Arduino/dd/de3/class_ticker.html
 
-NOTE - Timer1 interrupts may interfere with other functionality (PWM for example) depending on the timer chosen to configure.
-ESP8266 has 2 x Timers available:
-    0 (Used by WiFi)
-    1 is available to configure.
+The intention is to mimic a button debounce.
+I use a 1s regular timer is simulating a button press (Ticker buttonPress)
+(this would usually be attachInterrupt from a pin) which calls the onDebounce ISR.
+The onDebounce ISR then calls a Ticker debounce ISR that holds the code to run when the button is pressed.
 
-Calculations
-As these timers are hardware based, all timing is related to the clock of the timer:
-ESP8266 - 80Mhz
-
-timer speed (Hz) = Timer clock speed (Mhz) / prescaler
-The prescaler / divider is what the above frequency is divided by to form a "tick" of the timer (increment its counter).  
-The ISR is then configured to fire after a specific number of ticks.
-
-The prescaler is used, as the timers can only store up to 8/16 bits in their counters, meaning they would overflow every 
-256/16000000 s (16us) for 8 bit counters, and 65536 / 16000000 s (4us) for 16 bit counters, which is often far more than needed. 
-The prescaler allows this to be scaled to allow longer intervals.
-
-This example simply shows the count of times it has fired in the Serial Monitor, and is configured to fire once per second.
-
-The code in loop is simply to output to the user, and like with External Interrupts, loop can simply inspect the interrupts flag, 
-and perform an action based on this as needed
+The code in loop sends output to the Serial when the interrupts flags are set.
+Each time the button press timer fires, the Serial outputs the button press count
+The button press ISR triggers the debounce Ticker and ISR, and Serial output of debounce count will follow button count.
 */
 
-//#include <ESP8266WiFi.h>
+
 #include <Ticker.h>
 
-Ticker timer;		// this timer is used to print the number of interrupts every 0.5s
-Ticker updateOutput;	// create a Ticker instance that will be used to update the Serial output regularly
-
-const int tickerInterval = 1000;		// interval in ms (since we use attach_ms)
-int countTickerInterrupts = 0;
-volatile bool printTickerOutput = false;    	// volatile so that optimiser leaves it alone
-
-//timer1 variables
-volatile bool printTimer1_Output = false;
-int countTimer1Interrupts = 0;
+Ticker buttonPress;		// a Ticker instance that simulates pressing a button regularly
+Ticker debounce;		// this timer is used to delay by a short period
 
 
+const int buttonInterval = 1000;				// interval in ms (since we use attach_ms)
+int countButtonPress = 0;
+volatile bool printButtonOutput = false;    	// volatile so that optimiser leaves it alone
 
-// ISR to Fire when Timer1 is triggered
-void ICACHE_RAM_ATTR onTimer1() {
-	printTimer1_Output = true;
-	// Re-Arm the timer as using TIM_SINGLE
-	timer1_write(2500000);//12us
+const int debounceInterval = 300;				// interval in ms (since using once_ms)
+int countDebounceInterrupts = 0;
+volatile bool printDebounceOutput = false;    	// volatile so that optimiser leaves it alone
+
+
+// ISR to Fire when Ticker "buttonPress" is triggered.  NOTE that ticker ISRs do not need "ICACHE_RAM_ATTR"
+void onButtonPress(){
+	printButtonOutput = true;
+	// this for loop is not necessary, but simulates multiple 'bouncing' triggers from the button
+	for(int n=0; n<5; n++){	
+		debounce.once_ms(debounceInterval, onDebounce);	// (time in ms, ISR to call)
+	}
 }
 
-// ISR to Fire when Ticker "updateOutput" is triggered.  NOTE that ticker ISRs do not need "ICACHE_RAM_ATTR"
-void tickerUpdateOutput(){
-	printTickerOutput = true;
+// ISR to Fire when Ticker "debounce" is triggered.  NOTE that ticker ISRs do not need "ICACHE_RAM_ATTR"
+void onDebounce(){
+	printDebounceOutput = true;
+	// here is where your code to read the button state would go
+	// e.g buttonState = digitalRead(buttonPin);
 }
 
 
 void setup()
 {
 	Serial.begin(115200);
-	//Initialize Timer1 every 0.5s
-	timer1_attachInterrupt(onTimer1); // Add ISR Function
-	timer1_enable(TIM_DIV16, TIM_EDGE, TIM_SINGLE);
-	/* Dividers:
-		TIM_DIV1 = 0,   //80MHz (80 ticks/us - 104857.588 us max)
-		TIM_DIV16 = 1,  //5MHz (5 ticks/us - 1677721.4 us max)
-		TIM_DIV256 = 3  //312.5Khz (1 tick = 3.2us - 26843542.4 us max)
-	Reloads:
-		TIM_SINGLE	0 //on interrupt routine you need to write a new value to start the timer again
-		TIM_LOOP	1 //on interrupt the counter will start with the same value again
-	*/
-	
-	// Arm  Timer1 for our 0.5s Interval
-	timer1_write(2500000); // 2500000 / 5 ticks per us from TIM_DIV16 == 500,000 us interval 
 
-	// Ticker setup
-	updateOutput.attach_ms(tickerInterval, tickerUpdateOutput);	// (time in ms, ISR to call)
+	// activate the buttonPress Ticker 
+ 	buttonPress.attach_ms(buttonInterval, onButtonPress);	// (time in ms, ISR to call)
 }
 
 
 void loop()
 {
-    if(printTickerOutput){
-        countTickerInterrupts++;
+    if(printButtonOutput){
+        countButtonPress++;
 	    Serial.print("Total Ticks from Ticker: ");
-	    Serial.println(countTickerInterrupts);
-        printTickerOutput = false;
+	    Serial.println(countButtonPress);
+        printButtonOutput = false;
     }
     
-	if(printTimer1_Output){
-		countTimer1Interrupts++;
-		Serial.print("Total Ticks from Timer1: ");
-		Serial.println(countTimer1Interrupts);
-		printTimer1_Output = false;
+	if(printDebounceOutput){
+		countDebounceInterrupts++;
+		Serial.print("Total Ticks from Debounce: ");
+		Serial.println(countDebounceInterrupts);
+		printDebounceOutput = false;
 	}
 }
